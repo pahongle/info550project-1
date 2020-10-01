@@ -1,0 +1,62 @@
+---
+title: "INFO 550 Report"
+author: "Cheng Lyu"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    highlights: "pygments"
+---
+
+```{r, option, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE
+)
+```
+
+## Set up parameters 
+We first set the parameters we used to simulate a dataset with two biomarkers from a logistic regression.
+
+```{r, setup}
+set.seed(1234)
+p <- 1 # known biomarkers
+q <- 1 # new biomarkers
+beta <- c(1, 2, 0) # testing for the null hypothesis
+n <- 1000
+```
+
+## Simulate the dataset
+```{r, simulation}
+# sample from multi-normal distribution
+biomarker <- MASS::mvrnorm(n, rep(0, p + q), diag(1, p + q))
+z <- cbind(1, biomarker) %*% beta
+prob <- as.numeric(1 / (1 + exp(-z)))
+Y <- rbinom(n, 1, prob)
+n_1 <- sum(Y == 1)
+n_0 <- sum(Y == 0)
+
+# construct dataset
+mydata <- data.frame(Y = Y, X = biomarker, label = factor(Y, label = c("Controls", "Cases")))
+mydata <- mydata[order(mydata$Y, decreasing = T), ]
+rownames(mydata) <- NULL
+colnames(mydata)[2:3] <- c("First Biomarker", "Second Biomarker")
+case <- as.matrix(mydata[mydata$Y == 1, -1])
+control <- as.matrix(mydata[mydata$Y == 0, -1])
+```
+We have `r n_1` cases, and `r n_0` controls. A summary of values for each biomarker in both cases and controls are shown in the table below.
+
+```{r, get-table, echo = FALSE}
+knitr::kable(summary(arsenal::tableby(label ~ `First Biomarker` + `Second Biomarker`, mydata)), digits = 2)
+```
+
+## Fit logistic regression
+```{r, fit-model}
+# true underlying standardized coefficients
+theta <- beta[3:(p + q + 1)] / beta[2]
+
+# estimate mle of logistic regression
+mod <- glm(Y ~ ., family = "binomial", data = mydata)
+theta_hat <- mod$coefficients[3:(p + q + 1)] / mod$coefficients[2]
+```
+As we can see, the true coefficient is `r theta`, and our maximum likelihood estimate is `r round(theta_hat, 4)`. Therefore, thhe underlying true model is the logistic regression.
